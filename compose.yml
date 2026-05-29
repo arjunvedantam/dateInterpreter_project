@@ -27,19 +27,33 @@ services:
       dockerfile: Dockerfile
     container_name: nldate-backend
     environment:
+      SERVER_PORT:                 ${SERVER_PORT:-9600}
       SPRING_DATASOURCE_URL:      jdbc:postgresql://postgres:5432/nldates
       SPRING_DATASOURCE_USERNAME: postgres
       SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD:-password}
-      GITHUB_TOKEN:               ${GITHUB_TOKEN}
+      SPRING_DATASOURCE_HIKARI_CONNECTION_TIMEOUT: ${SPRING_DATASOURCE_HIKARI_CONNECTION_TIMEOUT:-30000}
+      SPRING_JPA_HIBERNATE_DDL_AUTO: ${SPRING_JPA_HIBERNATE_DDL_AUTO:-update}
+      SPRING_JPA_SHOW_SQL:        ${SPRING_JPA_SHOW_SQL:-true}
+      SPRING_JPA_DATABASE_PLATFORM: ${SPRING_JPA_DATABASE_PLATFORM:-org.hibernate.dialect.PostgreSQLDialect}
+      SPRING_JPA_HIBERNATE_FORMAT_SQL: ${SPRING_JPA_HIBERNATE_FORMAT_SQL:-true}
+      APP_TIME_ZONE:              ${APP_TIME_ZONE:-Asia/Kolkata}
+      OPENAI_API_KEY:             ${OPENAI_API_KEY:-}
+      OPENAI_MODEL:               ${OPENAI_MODEL:-gpt-4o-mini}
+      OPENAI_BASE_URL:            ${OPENAI_BASE_URL:-https://api.openai.com/v1/chat/completions}
+      NL_MODEL_API_KEY:           ${NL_MODEL_API_KEY:-}
+      NL_MODEL_NAME:              ${NL_MODEL_NAME:-}
+      NL_MODEL_ENDPOINT:          ${NL_MODEL_ENDPOINT:-}
+      GITHUB_TOKEN:               ${GITHUB_TOKEN:-}
     ports:
       - "9600:9600"
     depends_on:
-      - postgres
+      postgres:
+        condition: service_healthy
 
   # ── React Frontend (nginx) ──────────────────────────────────────────────────
   frontend:
     build:
-      context: ./dateInterpreterFrontend/dateInterpreterFrontend
+      context: ./dateInterpreterFrontend
       dockerfile: Dockerfile
     container_name: nldate-frontend
     ports:

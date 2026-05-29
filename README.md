@@ -1,6 +1,6 @@
 # 🗓️ Natural Language Date Interpreter
 
-A full-stack web application that interprets natural language date expressions (e.g. *"next Tuesday"*, *"three weeks from now"*) into structured JSON responses using the OpenAI API.
+A full-stack web application that interprets natural language date expressions (e.g. *"next Tuesday"*, *"three weeks from now"*) into structured JSON responses using the OpenAI Chat Completions API by default.
 
 ---
 
@@ -8,7 +8,7 @@ A full-stack web application that interprets natural language date expressions (
 
 ```
 ┌─────────────────────────┐        ┌──────────────────────────┐        ┌──────────────────┐
-│  React + TypeScript     │  HTTP  │  Spring Boot (Java 21)   │  HTTP  │  OpenAI API      │
+│  React + TypeScript     │  HTTP  │  Spring Boot (Java 21)   │  HTTP  │  Model API        │
 │  Vite / nginx           │ ──────▶│  Port 9600               │ ──────▶│  gpt-4o-mini     │
 │  Port 3000              │◀────── │  REST + WebFlux          │◀────── │                  │
 └─────────────────────────┘        └──────────┬───────────────┘        └──────────────────┘
@@ -22,7 +22,7 @@ A full-stack web application that interprets natural language date expressions (
 | Layer     | Technology                          |
 |-----------|-------------------------------------|
 | Frontend  | React 19, TypeScript, Vite, nginx   |
-| Backend   | Spring Boot 3.3, Java 21, WebFlux   |
+| Backend   | Spring Boot 3.3, Java 21, WebClient |
 | Database  | PostgreSQL 16                       |
 | Container | Docker, Docker Compose              |
 
@@ -31,7 +31,7 @@ A full-stack web application that interprets natural language date expressions (
 ## Features
 
 - 🔤 Accept natural language date expressions via a clean form UI
-- 🤖 Interpret them through OpenAI's `gpt-4o-mini` model
+- 🤖 Interpret them through a configurable chat model (default: `gpt-4o-mini`)
 - 📦 Return structured JSON: `date`, `startDate`, `endDate`, `description`, `original`
 - 💾 Persist every query and response to PostgreSQL
 - 📋 Display a real-time history of all past queries (newest first)
@@ -42,7 +42,7 @@ A full-stack web application that interprets natural language date expressions (
 ## Project Structure
 
 ```
-Learnbench/
+dateInterpreter_project/
 ├── dateInterpreter/                   # Spring Boot backend
 │   ├── src/main/java/com/nlp/dateInterpreter/
 │   │   ├── DateInterpreterApplication.java
@@ -56,15 +56,14 @@ Learnbench/
 │   ├── pom.xml
 │   └── Dockerfile
 │
-├── dateInterpreterFrontend/
-│   └── dateInterpreterFrontend/       # React frontend
-│       ├── src/
-│       │   ├── App.tsx
-│       │   ├── App.css
-│       │   └── services/dateInterpreter-api.ts
-│       ├── nginx.conf
-│       ├── Dockerfile
-│       └── vite.config.ts
+├── dateInterpreterFrontend/           # React frontend
+│   ├── src/
+│   │   ├── App.tsx
+│   │   ├── App.css
+│   │   └── services/dateInterpreter-api.ts
+│   ├── nginx.conf
+│   ├── Dockerfile
+│   └── vite.config.ts
 │
 ├── docker-compose.yml
 ├── .env.example
@@ -81,7 +80,7 @@ Learnbench/
 | Maven          | 3.9+            |
 | Node.js        | 20+             |
 | Docker Desktop | 24+             |
-| OpenAI API key | —               |
+| OpenAI API key  | —              |
 
 ---
 
@@ -90,25 +89,31 @@ Learnbench/
 ### 1. Clone / navigate to the project root
 
 ```bash
-cd Learnbench
+cd dateInterpreter_project
 ```
 
-### 2. Create your `.env` file
-
-```bash
-cp .env.example .env
-```
-
-Edit `.env` and fill in your values:
+### 2. Create or update your `.env` file
 
 ```env
-GITHUB_TOKEN=ghp_...        # your GitHub personal access token
-POSTGRES_PASSWORD=mysecurepassword
+SERVER_PORT=9600
+SPRING_DATASOURCE_URL=jdbc:postgresql://localhost:5432/nldates
+SPRING_DATASOURCE_USERNAME=postgres
+SPRING_DATASOURCE_PASSWORD=mysecurepassword
+SPRING_DATASOURCE_HIKARI_CONNECTION_TIMEOUT=30000
+SPRING_DATASOURCE_HIKARI_INITIALIZATION_FAIL_TIMEOUT=60000
+SPRING_JPA_HIBERNATE_DDL_AUTO=update
+SPRING_JPA_SHOW_SQL=true
+SPRING_JPA_DATABASE_PLATFORM=org.hibernate.dialect.PostgreSQLDialect
+SPRING_JPA_HIBERNATE_FORMAT_SQL=true
+APP_TIME_ZONE=Asia/Kolkata
+OPENAI_API_KEY=sk-...
+OPENAI_MODEL=gpt-4o-mini
+OPENAI_BASE_URL=https://api.openai.com/v1/chat/completions
 ```
 
-> **GitHub token requirements:**  
-> Generate a token at [github.com/settings/tokens](https://github.com/settings/tokens).  
-> An active **GitHub Copilot** subscription is required to use `api.githubcopilot.com`.
+> Your current project also supports `openAi-api-token=...` in the root `.env` file. The backend now loads that root `.env` automatically for local Spring Boot runs, and Docker Compose passes it to the backend container. If both are present, `NL_MODEL_API_KEY` or `OPENAI_API_KEY` take precedence over it.
+>
+> If you want to keep using a non-OpenAI provider, override `NL_MODEL_ENDPOINT` and set `NL_MODEL_API_KEY` directly. `GITHUB_TOKEN` is still supported as a fallback for GitHub Models-backed endpoints.
 
 ### 3. Build and start all services
 
@@ -155,13 +160,15 @@ docker-compose down -v       # also delete the postgres volume
 
    **Windows (PowerShell):**
    ```powershell
-   $env:GITHUB_TOKEN = "ghp_..."
+   $env:OPENAI_API_KEY = "sk-..."
+   $env:OPENAI_MODEL = "gpt-4o-mini"
    $env:SPRING_DATASOURCE_PASSWORD = "password"
    ```
 
    **Linux / macOS:**
    ```bash
-   export GITHUB_TOKEN=ghp_...
+   export OPENAI_API_KEY=sk-...
+   export OPENAI_MODEL=gpt-4o-mini
    export SPRING_DATASOURCE_PASSWORD=password
    ```
 
@@ -177,7 +184,7 @@ docker-compose down -v       # also delete the postgres volume
 ### Frontend
 
 ```bash
-cd dateInterpreterFrontend/dateInterpreterFrontend
+cd dateInterpreterFrontend
 npm install
 npm run dev
 ```
@@ -266,12 +273,25 @@ The table `nl_dates` is auto-created by Hibernate (`ddl-auto: update`):
 
 | Variable                   | Default              | Description                     |
 |----------------------------|----------------------|---------------------------------|
-| `GITHUB_TOKEN`           | *(required)*         | GitHub PAT with Copilot API access  |
-| `POSTGRES_PASSWORD`        | `password`           | PostgreSQL password             |
-| `SPRING_DATASOURCE_URL`    | `jdbc:postgresql://localhost:5432/nldates` | DB JDBC URL |
-| `SPRING_DATASOURCE_USERNAME` | `postgres`         | DB username                     |
-| `SPRING_DATASOURCE_PASSWORD` | `password`         | DB password                     |
-| `NL_MODEL_ENDPOINT`        | `https://api.githubcopilot.com/chat/completions` | Override API endpoint |
+| `SERVER_PORT`               | Required             | Backend port |
+| `SPRING_DATASOURCE_URL`     | Required             | DB JDBC URL |
+| `SPRING_DATASOURCE_USERNAME`| Required             | DB username |
+| `SPRING_DATASOURCE_PASSWORD`| Required             | DB password |
+| `SPRING_DATASOURCE_HIKARI_CONNECTION_TIMEOUT` | Required | Hikari connection timeout |
+| `SPRING_DATASOURCE_HIKARI_INITIALIZATION_FAIL_TIMEOUT` | Required | Hikari initialization timeout |
+| `SPRING_JPA_HIBERNATE_DDL_AUTO` | Required        | Hibernate schema mode |
+| `SPRING_JPA_SHOW_SQL`       | Required             | Enable SQL logging |
+| `SPRING_JPA_DATABASE_PLATFORM` | Required         | Hibernate dialect |
+| `SPRING_JPA_HIBERNATE_FORMAT_SQL` | Required      | Format SQL logs |
+| `APP_TIME_ZONE`             | Required             | JDBC/session timezone |
+| `OPENAI_API_KEY`            | Preferred            | OpenAI API key for the backend model call |
+| `openAi-api-token`          | Fallback             | Legacy/custom token name supported by the backend |
+| `OPENAI_MODEL`              | Required unless `NL_MODEL_NAME` is set | Model name sent to the API |
+| `OPENAI_BASE_URL`           | Required unless `NL_MODEL_ENDPOINT` is set | OpenAI-compatible chat endpoint |
+| `NL_MODEL_API_KEY`          | Optional override    | Provider-agnostic API key override |
+| `NL_MODEL_ENDPOINT`         | Optional override    | Provider-agnostic endpoint override |
+| `NL_MODEL_NAME`             | Optional override    | Provider-agnostic model override |
+| `GITHUB_TOKEN`              | Optional fallback    | GitHub Models token if you point `NL_MODEL_ENDPOINT` at GitHub Models |
 
 ---
 
@@ -279,8 +299,8 @@ The table `nl_dates` is auto-created by Hibernate (`ddl-auto: update`):
 
 | Challenge | Solution |
 |-----------|----------|
-| OpenAI sometimes returns markdown-wrapped JSON | Added `response_format: {type: "json_object"}` to the API call + system message enforcing raw JSON |
+| Model responses may not be valid JSON | The backend now requests `response_format: {type: "json_object"}` and returns an HTTP error when parsing still fails |
 | Frontend CORS errors during local dev | Configured Vite `server.proxy` to forward `/api` requests to the backend — browser only talks to the dev server |
-| PostgreSQL not ready when backend starts | Added `healthcheck` + `condition: service_healthy` in docker-compose so backend waits for a healthy DB |
+| PostgreSQL not ready when backend starts | Added `healthcheck` + `condition: service_healthy` in docker-compose so the backend waits for a healthy DB |
 | Serializing JSONB column as object (not string) | Used `@JsonRawValue` on the `jsonResponse` field — Jackson embeds it inline as raw JSON |
 | Hardcoded credentials | Moved all secrets to environment variables; provided `.env.example` template |

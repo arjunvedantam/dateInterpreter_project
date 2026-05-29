@@ -17,12 +17,16 @@ const EXAMPLES = [
 
 function App() {
   const [input, setInput] = useState("");
+  const [timezone, setTimezone] = useState(
+    () => Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC"
+  );
   const [submittedQuery, setSubmittedQuery] = useState("");
   const [result, setResult] = useState<InterpretResponse | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [history, setHistory] = useState<HistoryItem[]>([]);
   const [historyLoading, setHistoryLoading] = useState(true);
+  const [historyError, setHistoryError] = useState<string | null>(null);
 
   useEffect(() => {
     loadHistory();
@@ -30,10 +34,13 @@ function App() {
 
   const loadHistory = async () => {
     try {
+      setHistoryError(null);
       const data = await fetchHistory();
       setHistory(data);
-    } catch {
-      // Non-critical — history may just be empty
+    } catch (err: unknown) {
+      setHistoryError(
+        err instanceof Error ? err.message : "Failed to load history"
+      );
     } finally {
       setHistoryLoading(false);
     }
@@ -48,7 +55,7 @@ function App() {
     setSubmittedQuery(query);
 
     try {
-      const res = await interpretDate(query);
+      const res = await interpretDate(query, timezone.trim() || undefined);
       setResult(res);
       // Optimistically prepend to history
       setHistory((prev) => [
@@ -97,6 +104,17 @@ function App() {
               disabled={loading}
               rows={4}
             />
+            <label className="timezone-field">
+              <span>Timezone</span>
+              <input
+                className="input-area"
+                type="text"
+                value={timezone}
+                onChange={(e) => setTimezone(e.target.value)}
+                disabled={loading}
+                placeholder="e.g. Asia/Kolkata"
+              />
+            </label>
             <button
               className="btn-primary"
               onClick={handleSubmit}
@@ -149,6 +167,10 @@ function App() {
 
           {historyLoading ? (
             <p className="subtle">Loading history…</p>
+          ) : historyError ? (
+            <div className="card empty-state">
+              <p>{historyError}</p>
+            </div>
           ) : history.length === 0 ? (
             <div className="card empty-state">
               <p>No queries yet — submit something above to get started!</p>

@@ -1,8 +1,10 @@
 package com.nlp.dateInterpreter.model;
 
-import com.fasterxml.jackson.annotation.JsonRawValue;
+import com.fasterxml.jackson.databind.JsonNode;
 import jakarta.persistence.*;
 import lombok.*;
+import org.hibernate.annotations.JdbcTypeCode;
+import org.hibernate.type.SqlTypes;
 
 import java.time.LocalDateTime;
 
@@ -20,9 +22,9 @@ public class DateInterpreter {
 
     private String userInput;
 
-    @JsonRawValue
+    @JdbcTypeCode(SqlTypes.JSON)
     @Column(columnDefinition = "jsonb")
-    private String jsonResponse;
+    private JsonNode jsonResponse;
 
     @Column(name = "created_at", nullable = false, updatable = false)
     private LocalDateTime createdAt;

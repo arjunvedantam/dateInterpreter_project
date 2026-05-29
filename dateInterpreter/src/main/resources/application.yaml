@@ -1,31 +1,31 @@
 server:
-  port: 9600
+  port: ${SERVER_PORT}
 
 spring:
   application:
     name: dateInterpreter
   datasource:
-    url: ${SPRING_DATASOURCE_URL:jdbc:postgresql://localhost:5432/nldates}
-    username: ${SPRING_DATASOURCE_USERNAME:postgres}
-    password: ${SPRING_DATASOURCE_PASSWORD:password}
+    url: ${SPRING_DATASOURCE_URL}
+    username: ${SPRING_DATASOURCE_USERNAME}
+    password: ${SPRING_DATASOURCE_PASSWORD}
     hikari:
-      connection-timeout: 30000
-      initialization-fail-timeout: 60000
+      connection-timeout: ${SPRING_DATASOURCE_HIKARI_CONNECTION_TIMEOUT}
   jpa:
     hibernate:
-      ddl-auto: update
-      show-sql: true
+      ddl-auto: ${SPRING_JPA_HIBERNATE_DDL_AUTO}
+      show-sql: ${SPRING_JPA_SHOW_SQL}
     properties:
-      dialect: org.hibernate.dialect.PostgreSQLDialect
+      dialect: ${SPRING_JPA_DATABASE_PLATFORM}
       hibernate:
-        format_sql: true
+        format_sql: ${SPRING_JPA_HIBERNATE_FORMAT_SQL}
         jdbc:
-          time_zone: Asia/Kolkata
+          time_zone: ${APP_TIME_ZONE}
   jackson:
     serialization:
       write-dates-as-timestamps: false
 
 nl:
   model:
-    endpoint: ${NL_MODEL_ENDPOINT:https://models.inference.ai.azure.com/chat/completions}
-    apiKey: ${NL_MODEL_API_KEY:}
+    endpoint: ${NL_MODEL_ENDPOINT:${OPENAI_BASE_URL}}
+    api-key: ${NL_MODEL_API_KEY:${OPENAI_API_KEY:${openAi-api-token:${GITHUB_TOKEN}}}}
+    name: ${NL_MODEL_NAME:${OPENAI_MODEL}}

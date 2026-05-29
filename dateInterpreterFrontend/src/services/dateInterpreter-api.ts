@@ -9,16 +9,37 @@ export interface HistoryItem {
 
 const API_BASE = "/api/date";
 
-export async function interpretDate(text: string): Promise<InterpretResponse> {
+interface ApiErrorResponse {
+  code?: string;
+  message?: string;
+  detail?: string;
+}
+
+async function readError(res: Response): Promise<string> {
+  const contentType = res.headers.get("content-type") ?? "";
+
+  if (contentType.includes("application/json")) {
+    const body = (await res.json()) as ApiErrorResponse;
+    if (body.message && body.detail) return `${body.message}: ${body.detail}`;
+    if (body.message) return body.message;
+  }
+
+  const body = await res.text();
+  return body || `Request failed: ${res.status} ${res.statusText}`;
+}
+
+export async function interpretDate(
+  text: string,
+  timezone?: string
+): Promise<InterpretResponse> {
   const res = await fetch(`${API_BASE}/interpret`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ text }),
+    body: JSON.stringify({ text, timezone }),
   });
 
   if (!res.ok) {
-    const body = await res.text();
-    throw new Error(body || `Request failed: ${res.status} ${res.statusText}`);
+    throw new Error(await readError(res));
   }
 
   return res.json();
@@ -26,6 +47,6 @@ export async function interpretDate(text: string): Promise<InterpretResponse> {
 
 export async function fetchHistory(): Promise<HistoryItem[]> {
   const res = await fetch(`${API_BASE}/history`);
-  if (!res.ok) throw new Error(`Failed to fetch history: ${res.statusText}`);
+  if (!res.ok) throw new Error(await readError(res));
   return res.json();
 }

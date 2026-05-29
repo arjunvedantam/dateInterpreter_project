@@ -1,3 +1,8 @@
 package com.nlp.dateInterpreter.dto;
 
-public record InterpretRequest(String text, String timezone) {}
+import jakarta.validation.constraints.NotBlank;
+
+public record InterpretRequest(
+        @NotBlank(message = "text is required") String text,
+        String timezone
+) {}

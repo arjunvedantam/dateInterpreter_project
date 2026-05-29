@@ -1,26 +1,47 @@
 package com.nlp.dateInterpreter;
 
+import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
-
+import com.nlp.dateInterpreter.exception.DateInterpretationException;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpHeaders;
+import org.springframework.http.HttpStatus;
+import org.springframework.http.HttpStatusCode;
 import org.springframework.http.MediaType;
 import org.springframework.stereotype.Service;
 import org.springframework.web.reactive.function.client.WebClient;
-import reactor.core.publisher.Mono;
+
+import java.time.DateTimeException;
+import java.time.ZonedDateTime;
+import java.time.ZoneId;
+import java.time.format.DateTimeFormatter;
 
 @Service
 public class DateInterpreterService {
+    private static final DateTimeFormatter REFERENCE_TIMESTAMP_FORMATTER =
+            DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss z");
     private final WebClient webClient;
-    private final ObjectMapper mapper = new ObjectMapper();
+    private final ObjectMapper mapper;
+    private final String modelName;
 
     public DateInterpreterService(WebClient.Builder builder,
                                   @Value("${nl.model.endpoint}") String endpoint,
-                                  @Value("${nl.model.apiKey}") String apiKey) {
+                                  @Value("${nl.model.api-key}") String apiKey,
+                                  @Value("${nl.model.name}") String modelName,
+                                  ObjectMapper mapper) {
+        if (apiKey == null || apiKey.isBlank()) {
+            throw new DateInterpretationException(
+                    HttpStatus.INTERNAL_SERVER_ERROR,
+                    "Model API key is not configured",
+                    "Set OPENAI_API_KEY, NL_MODEL_API_KEY, or GITHUB_TOKEN before starting the backend."
+            );
+        }
 
+        this.mapper = mapper;
+        this.modelName = modelName;
         this.webClient = builder
                 .baseUrl(endpoint)
                 .defaultHeader(HttpHeaders.AUTHORIZATION, "Bearer " + apiKey)
@@ -28,12 +49,12 @@ public class DateInterpreterService {
                 .build();
     }
 
-    public Mono<JsonNode> interpretText(String text, String timezone) {
-
+    public JsonNode interpretText(String text, String timezone) {
         String prompt = buildPrompt(text, timezone);
 
         ObjectNode body = mapper.createObjectNode();
-        body.put("model", "gpt-4o-mini");
+        body.put("model", modelName);
+        body.set("response_format", mapper.createObjectNode().put("type", "json_object"));
 
         ArrayNode messages = mapper.createArrayNode();
         messages.add(
@@ -48,16 +69,35 @@ public class DateInterpreterService {
         );
         body.set("messages", messages);
 
-        return webClient.post()
+        JsonNode response = webClient.post()
                 .bodyValue(body)
                 .retrieve()
+                .onStatus(HttpStatusCode::isError, clientResponse -> clientResponse.bodyToMono(String.class)
+                        .map(bodyText -> new DateInterpretationException(
+                                HttpStatus.BAD_GATEWAY,
+                                "Model API request failed",
+                                bodyText
+                        )))
                 .bodyToMono(JsonNode.class)
-                .map(this::extractJson);
+                .block();
+
+        if (response == null) {
+            throw new DateInterpretationException(
+                    HttpStatus.BAD_GATEWAY,
+                    "Model API returned an empty response"
+            );
+        }
+
+        return extractJson(response);
     }
 
-    private String buildPrompt(String text, String timezone) {
+    String buildPrompt(String text, String timezone) {
+        ZoneId zoneId = resolveZoneId(timezone);
+        ZonedDateTime now = ZonedDateTime.now(zoneId);
+
         return """
             Interpret the following natural language date expression into strict JSON.
+            Use the provided current date/time as the reference point for any relative expression like "today", "tomorrow", "next Friday", "last week", or "2 months from now".
             Respond ONLY with JSON in this format:
             {
               "date": "YYYY-MM-DD",
@@ -66,22 +106,53 @@ public class DateInterpreterService {
               "description": "explanation",
               "original": "<original>"
             }
+            Current date/time: %s
+            Current date: %s
+            Current day of week: %s
             Timezone: %s
             Original: %s
-        """.formatted(timezone == null ? "UTC" : timezone, text);
+        """.formatted(
+                now.format(REFERENCE_TIMESTAMP_FORMATTER),
+                now.toLocalDate(),
+                now.getDayOfWeek(),
+                zoneId.getId(),
+                text
+        );
+    }
+
+    private ZoneId resolveZoneId(String timezone) {
+        String normalizedTimezone = timezone == null || timezone.isBlank() ? "UTC" : timezone.trim();
+        try {
+            return ZoneId.of(normalizedTimezone);
+        } catch (DateTimeException ex) {
+            throw new DateInterpretationException(
+                    HttpStatus.BAD_REQUEST,
+                    "Invalid timezone",
+                    "Unsupported timezone: " + normalizedTimezone,
+                    ex
+            );
+        }
     }
 
     private JsonNode extractJson(JsonNode response) {
         try {
-            String content = response.path("choices").get(0)
-                    .path("message").path("content").asText();
+            JsonNode contentNode = response.at("/choices/0/message/content");
+            if (contentNode.isMissingNode() || contentNode.asText().isBlank()) {
+                throw new DateInterpretationException(
+                        HttpStatus.BAD_GATEWAY,
+                        "Model API returned an empty completion",
+                        response.toString()
+                );
+            }
 
-            return mapper.readTree(content);
-        } catch (Exception e) {
-            ObjectNode err = mapper.createObjectNode();
-            err.put("error", "PARSE_ERROR");
-            err.put("raw", response.toString());
-            return err;
+            return mapper.readTree(contentNode.asText());
+        } catch (JsonProcessingException e) {
+            throw new DateInterpretationException(
+                    HttpStatus.BAD_GATEWAY,
+                    "Model API returned invalid JSON",
+                    response.toString(),
+                    e
+            );
         }
     }
 }

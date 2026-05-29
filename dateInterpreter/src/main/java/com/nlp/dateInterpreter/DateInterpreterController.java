@@ -6,8 +6,8 @@ import com.nlp.dateInterpreter.repository.DateInterpreterRepository;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import lombok.RequiredArgsConstructor;
+import jakarta.validation.Valid;
 import org.springframework.web.bind.annotation.*;
-import reactor.core.publisher.Mono;
 import java.util.List;
 
 @RestController
@@ -18,16 +18,16 @@ public class DateInterpreterController {
     private final DateInterpreterRepository repo;
 
     @PostMapping("/interpret")
-    public Mono<JsonNode> interpret(@RequestBody InterpretRequest request) {
-        return service.interpretText(request.text(), request.timezone())
-                .flatMap(json -> {
-                    DateInterpreter q = DateInterpreter.builder()
-                            .userInput(request.text())
-                            .jsonResponse(json.toString())
-                            .build();
-                    repo.save(q);
-                    return Mono.just(json);
-                });
+    public JsonNode interpret(@Valid @RequestBody InterpretRequest request) {
+        JsonNode json = service.interpretText(request.text(), request.timezone());
+
+        DateInterpreter q = DateInterpreter.builder()
+                .userInput(request.text())
+                .jsonResponse(json)
+                .build();
+        repo.save(q);
+
+        return json;
     }
 
     @GetMapping("/history")
