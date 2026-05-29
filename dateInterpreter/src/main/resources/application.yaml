@@ -1,0 +1,31 @@
+server:
+  port: 9600
+
+spring:
+  application:
+    name: dateInterpreter
+  datasource:
+    url: ${SPRING_DATASOURCE_URL:jdbc:postgresql://localhost:5432/nldates}
+    username: ${SPRING_DATASOURCE_USERNAME:postgres}
+    password: ${SPRING_DATASOURCE_PASSWORD:password}
+    hikari:
+      connection-timeout: 30000
+      initialization-fail-timeout: 60000
+  jpa:
+    hibernate:
+      ddl-auto: update
+      show-sql: true
+    properties:
+      dialect: org.hibernate.dialect.PostgreSQLDialect
+      hibernate:
+        format_sql: true
+        jdbc:
+          time_zone: Asia/Kolkata
+  jackson:
+    serialization:
+      write-dates-as-timestamps: false
+
+nl:
+  model:
+    endpoint: ${NL_MODEL_ENDPOINT:https://models.inference.ai.azure.com/chat/completions}
+    apiKey: ${NL_MODEL_API_KEY:}

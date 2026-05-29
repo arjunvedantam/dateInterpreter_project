@@ -1,0 +1,51 @@
+version: "3.9"
+
+services:
+
+  # ── PostgreSQL ──────────────────────────────────────────────────────────────
+  postgres:
+    image: postgres:16-alpine
+    container_name: nldate-postgres
+    environment:
+      POSTGRES_DB:       nldates
+      POSTGRES_USER:     postgres
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-password}
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD", "pg_isready", "-U", "postgres"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ── Spring Boot Backend ─────────────────────────────────────────────────────
+  backend:
+    build:
+      context: ./dateInterpreter
+      dockerfile: Dockerfile
+    container_name: nldate-backend
+    environment:
+      SPRING_DATASOURCE_URL:      jdbc:postgresql://postgres:5432/nldates
+      SPRING_DATASOURCE_USERNAME: postgres
+      SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD:-password}
+      GITHUB_TOKEN:               ${GITHUB_TOKEN}
+    ports:
+      - "9600:9600"
+    depends_on:
+      - postgres
+
+  # ── React Frontend (nginx) ──────────────────────────────────────────────────
+  frontend:
+    build:
+      context: ./dateInterpreterFrontend
+      dockerfile: Dockerfile
+    container_name: nldate-frontend
+    ports:
+      - "3000:80"
+    depends_on:
+      - backend
+
+volumes:
+  postgres_data:
